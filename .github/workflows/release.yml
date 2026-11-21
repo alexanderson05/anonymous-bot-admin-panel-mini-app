@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create release from latest CHANGELOG entry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep -m1 -oE '^## v[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | sed 's/^## //')
+          if [ -z "$VERSION" ]; then
+            echo "No version heading found in CHANGELOG.md"
+            exit 1
+          fi
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists, skipping."
+            exit 0
+          fi
+          awk -v h="## $VERSION" 'BEGIN{p=0} /^## /{ if(p) exit; if($0==h) p=1; next } p' CHANGELOG.md > notes.md
+          gh release create "$VERSION" worker.js \
+            --title "$VERSION" \
+            --notes-file notes.md \
+            --target "$GITHUB_SHA"
